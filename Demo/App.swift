@@ -15,7 +15,10 @@ let appReducer = Reducer<AppState, AppAction, Void>.combine(
     detailReducer.pullback(
         state: \.detail,
         action: /AppAction.detail,
-        environment: { _ in () }
+        environment: { env in
+            struct DetailID: Hashable {}
+            return DetailEnvironment(cancellationId: DetailID())
+        }
     ),
     Reducer { state, action, _ in
         switch action {
@@ -32,7 +35,7 @@ let appReducer = Reducer<AppState, AppAction, Void>.combine(
             return .none
         }
     }
-)
+).debugActions()
 
 struct AppView: View {
     let store: Store<AppState, AppAction>

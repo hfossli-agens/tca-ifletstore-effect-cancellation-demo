@@ -13,25 +13,47 @@ enum DetailAction: Equatable {
     case peer(AvatarAction)
 }
 
-struct TimerId: Hashable {}
+struct GenericCancellationId: Hashable {
+    var parent: AnyHashable?
+    var current: AnyHashable
+}
 
+struct DetailEnvironment {
+    var cancellationId: AnyHashable
+    
+    var timerID: AnyHashable {
+        struct TimerID: Hashable {}
+        return GenericCancellationId(parent: cancellationId, current: TimerID())
+    }
+    
+    var meEnv: AvatarEnvironment {
+        struct MeID: Hashable {}
+        return AvatarEnvironment(
+            cancellationId: GenericCancellationId(parent: cancellationId, current: MeID())
+        )
+    }
+    
+    var peerEnv: AvatarEnvironment {
+        struct PeerID: Hashable {}
+        return AvatarEnvironment(
+            cancellationId: GenericCancellationId(parent: cancellationId, current: PeerID())
+        )
+    }
+}
 
-
-let detailReducer = Reducer<DetailState, DetailAction, Void>.combine(
+let detailReducer = Reducer<DetailState, DetailAction, DetailEnvironment>.combine(
     avatarReducer.pullback(
         state: \.me,
         action: /DetailAction.me,
         environment: { env in
-            struct Cancellation: Hashable {}
-            return AvatarEnvironment(cancellationId: Cancellation())
+            return env.meEnv
         }
     ),
     avatarReducer.pullback(
         state: \.peer,
         action: /DetailAction.peer,
         environment: { env in
-            struct Cancellation: Hashable {}
-            return AvatarEnvironment(cancellationId: Cancellation())
+            return env.peerEnv
         }
     ),
     Reducer { state, action, _ in
@@ -48,11 +70,15 @@ let detailReducer = Reducer<DetailState, DetailAction, Void>.combine(
         }
     }
 )
-.lifecycle(onAppear: {
-    Effect.timer(id: TimerId(), every: 1, tolerance: .zero, on: DispatchQueue.main)
+.lifecycle(onAppear: { env in
+    Effect.timer(id: env.timerID, every: 1, tolerance: .zero, on: DispatchQueue.main)
         .map { _ in DetailAction.timerTicked }
-}, onDisappear: {
-    .cancel(id: TimerId())
+}, onDisappear: { env in
+    return Effect.concatenate(
+        .cancel(id: env.timerID),
+        .cancel(id: env.meEnv.cancellationId),
+        .cancel(id: env.peerEnv.cancellationId)
+    )
 })
 
 struct DetailView: View {
@@ -105,3 +131,4 @@ struct DetailView_Previews: PreviewProvider {
     }
 }
 #endif
+

@@ -9,7 +9,6 @@ struct AvatarState: Equatable {
 
 enum AvatarAction: Equatable {
     case onAppear
-    case onDisappear
     case load
     case loaded(UIImage)
     case failed(AvatarError)
@@ -47,15 +46,12 @@ let avatarReducer = Reducer<AvatarState, AvatarAction, AvatarEnvironment> { stat
         
     case .onAppear:
         return .init(value: .load)
-        
-    case .onDisappear:
-        return .cancel(id: env.cancellationId)
     }
 }
 
 struct AvatarView: View {
     let store: Store<AvatarState, AvatarAction>
-
+    
     var body: some View {
         WithViewStore(store) { viewStore in
             VStack(spacing: 16) {
@@ -68,8 +64,6 @@ struct AvatarView: View {
                 }
             }.onAppear {
                 viewStore.send(.onAppear)
-            }.onDisappear {
-                viewStore.send(.onDisappear)
             }
         }
     }
