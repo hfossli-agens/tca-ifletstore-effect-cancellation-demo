@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AppState: Equatable {
     var detail: DetailState?
+    var isPresentingDetail: Bool = false
 }
 
 enum AppAction {
@@ -21,18 +22,21 @@ let appReducer = Reducer<AppState, AppAction, Void>.combine(
         switch action {
         case .presentDetail:
             state.detail = .init()
+            state.isPresentingDetail = true
             return .none
 
         case .dismissDetail:
-            state.detail = nil
-
+            state.isPresentingDetail = false
+            return .none
+            
+        case .detail(.onDisappear):
             return .none
 
         case .detail(_):
             return .none
         }
     }
-)
+).debugActions()
 
 struct AppView: View {
     let store: Store<AppState, AppAction>
@@ -41,7 +45,7 @@ struct AppView: View {
         WithViewStore(store) { viewStore in
             VStack(spacing: 16) {
                 Text("App").font(.title).padding(.top, 100)
-                if viewStore.state.detail != nil {
+                if viewStore.isPresentingDetail {
                     Button(action: { viewStore.send(.dismissDetail) }) {
                         Text("Dismiss Detail")
                     }
@@ -50,11 +54,13 @@ struct AppView: View {
                         Text("Present Detail")
                     }
                 }
-                IfLetStore(self.store.scope(
-                    state: \.detail,
-                    action: AppAction.detail
-                )) { detailStore in
-                    DetailView(store: detailStore)
+                if viewStore.isPresentingDetail {
+                    IfLetStore(self.store.scope(
+                        state: \.detail,
+                        action: AppAction.detail
+                    )) { detailStore in
+                        DetailView(store: detailStore)
+                    }
                 }
                 Spacer()
             }
