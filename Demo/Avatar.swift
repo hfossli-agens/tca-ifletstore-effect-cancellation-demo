@@ -11,7 +11,7 @@ enum AvatarAction: Equatable {
     case onAppear
     case onDisappear
     case load
-    case loaded(UIImage)
+    case loaded(String)
     case failed(AvatarError)
 }
 
@@ -30,15 +30,26 @@ let avatarReducer = Reducer<AvatarState, AvatarAction, AvatarEnvironment> { stat
     switch action {
     
     case .load:
-        return Just(UIImage(systemName: "faceid")!)
+        return Just("faceid")
             .map { AvatarAction.loaded($0) }
             .replaceError(with: AvatarAction.failed(.network))
             .delay(for: .seconds(1), scheduler: DispatchQueue.main)
+            .handleEvents(receiveSubscription: { (sub) in
+                print("receiveSubscription avatar")
+            }, receiveOutput: { (output) in
+                print("receiveOutput avatar")
+            }, receiveCompletion: { (completion) in
+                print("receiveCompletion avatar")
+            }, receiveCancel: {
+                print("receiveCancel avatar")
+            }, receiveRequest: { (demand) in
+                print("receiveRequest avatar")
+            })
             .eraseToEffect()
             .cancellable(id: env.cancellationId)
         
-    case .loaded(let image):
-        state.image = image
+    case .loaded(let name):
+        state.image = UIImage(systemName: name)
         return .none
         
     case .failed(let error):
@@ -55,7 +66,7 @@ let avatarReducer = Reducer<AvatarState, AvatarAction, AvatarEnvironment> { stat
 
 struct AvatarView: View {
     let store: Store<AvatarState, AvatarAction>
-
+    
     var body: some View {
         WithViewStore(store) { viewStore in
             VStack(spacing: 16) {
@@ -69,7 +80,7 @@ struct AvatarView: View {
             }.onAppear {
                 viewStore.send(.onAppear)
             }.onDisappear {
-                viewStore.send(.onDisappear)
+                viewStore.cancelAll()
             }
         }
     }

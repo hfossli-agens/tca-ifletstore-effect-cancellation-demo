@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import SwiftUI
+import Combine
 
 struct DetailState: Equatable {
     var time: Int = 0
@@ -11,13 +12,17 @@ enum DetailAction: Equatable {
     case timerTicked
     case me(AvatarAction)
     case peer(AvatarAction)
+    case onAppear
+    case onDisappear
 }
 
 struct TimerId: Hashable {}
 
+struct DetailEnvironment {
+    var cancellationId: AnyHashable
+}
 
-
-let detailReducer = Reducer<DetailState, DetailAction, Void>.combine(
+let detailReducer = Reducer<DetailState, DetailAction, DetailEnvironment>.combine(
     avatarReducer.pullback(
         state: \.me,
         action: /DetailAction.me,
@@ -45,18 +50,37 @@ let detailReducer = Reducer<DetailState, DetailAction, Void>.combine(
             
         case .peer(_):
             return .none
+            
+        case .onAppear:
+            return Publishers.Timer(
+                every: 1,
+                tolerance: .zero,
+                scheduler: DispatchQueue.main,
+                options: nil
+            )
+            .autoconnect()
+            .handleEvents(receiveSubscription: { (sub) in
+                print("receiveSubscription")
+            }, receiveOutput: { (output) in
+                print("receiveOutput")
+            }, receiveCompletion: { (completion) in
+                print("receiveCompletion")
+            }, receiveCancel: {
+                print("receiveCancel")
+            }, receiveRequest: { (demand) in
+                print("receiveRequest")
+            })
+            .catchToEffect()
+            .map { _ in DetailAction.timerTicked }
+            
+        case .onDisappear:
+            return .none
         }
     }
 )
-.lifecycle(onAppear: {
-    Effect.timer(id: TimerId(), every: 1, tolerance: .zero, on: DispatchQueue.main)
-        .map { _ in DetailAction.timerTicked }
-}, onDisappear: {
-    .cancel(id: TimerId())
-})
 
 struct DetailView: View {
-    let store: Store<DetailState, LifecycleAction<DetailAction>>
+    let store: Store<DetailState, DetailAction>
 
     var body: some View {
         WithViewStore(store) { viewStore in
@@ -65,7 +89,8 @@ struct DetailView: View {
                     AvatarView(
                         store: self.store.scope(
                             state: \.me,
-                            action: { .action(DetailAction.me($0)) }
+                            action: { .me($0) },
+                            cancellationId: [store.cancellationId, "me"]
                         )
                     )
                     Text("Me").font(.title)
@@ -79,8 +104,9 @@ struct DetailView: View {
                 VStack {
                     AvatarView(
                         store: self.store.scope(
-                            state: \.me,
-                            action: { .action(DetailAction.me($0)) }
+                            state: \.peer,
+                            action: { .peer($0) },
+                            cancellationId: [store.cancellationId, "peer"]
                         )
                     )
                     Text("Peer").font(.title)
@@ -88,7 +114,7 @@ struct DetailView: View {
             }.onAppear {
                 viewStore.send(.onAppear)
             }.onDisappear {
-                viewStore.send(.onDisappear)
+                viewStore.cancelAll()
             }
         }
     }

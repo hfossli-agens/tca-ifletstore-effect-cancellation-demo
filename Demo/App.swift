@@ -3,20 +3,33 @@ import SwiftUI
 
 struct AppState: Equatable {
     var detail: DetailState?
+    var detail2: DetailState? = DetailState()
     var isPresentingDetail: Bool = false
 }
 
 enum AppAction {
     case presentDetail
     case dismissDetail
-    case detail(LifecycleAction<DetailAction>)
+    case detail(DetailAction)
+    case detail2(DetailAction)
 }
 
 let appReducer = Reducer<AppState, AppAction, Void>.combine(
-    detailReducer.pullback(
+    detailReducer.optional().pullback(
         state: \.detail,
         action: /AppAction.detail,
-        environment: { _ in () }
+        environment: { _ in
+            struct Cancellation: Hashable {}
+            return DetailEnvironment(cancellationId: Cancellation())
+        }
+    ),
+    detailReducer.optional().pullback(
+        state: \.detail2,
+        action: /AppAction.detail2,
+        environment: { _ in
+            struct Cancellation: Hashable {}
+            return DetailEnvironment(cancellationId: Cancellation())
+        }
     ),
     Reducer { state, action, _ in
         switch action {
@@ -30,13 +43,17 @@ let appReducer = Reducer<AppState, AppAction, Void>.combine(
             return .none
             
         case .detail(.onDisappear):
+            state.detail = nil
             return .none
 
         case .detail(_):
             return .none
+            
+        case .detail2(_):
+            return .none
         }
     }
-).debugActions()
+)
 
 struct AppView: View {
     let store: Store<AppState, AppAction>
@@ -54,14 +71,23 @@ struct AppView: View {
                         Text("Present Detail")
                     }
                 }
+                
                 if viewStore.isPresentingDetail {
                     IfLetStore(self.store.scope(
                         state: \.detail,
-                        action: AppAction.detail
+                        action: AppAction.detail,
+                        cancellationId: "testings"
+                    )) { detailStore in
+                        DetailView(store: detailStore) 
+                    }
+                }
+                
+                    IfLetStore(self.store.scope(
+                        state: \.detail2,
+                        action: AppAction.detail2
                     )) { detailStore in
                         DetailView(store: detailStore)
                     }
-                }
                 Spacer()
             }
         }
